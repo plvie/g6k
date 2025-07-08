@@ -142,8 +142,10 @@ def decoupler(decouple, n, samples, q, stddev, d):
         ms = list(range(n, min(5*n+1, samples+1)))
 
     for m in ms:
-        beta_bound = min(m+1, 110+default_dim4free_fun(110))
-        svp_bound = min(m+1, 156)
+        # beta_bound = min(m+1, 110+default_dim4free_fun(110))
+        # svp_bound = min(m+1, 156)
+        beta_bound = m+1
+        svp_bound = m+1
         for bkz_block_size in range(40, beta_bound):
             delta_0 = delta_0f(bkz_block_size)
             if decouple:
@@ -210,6 +212,8 @@ def sim_params(n, alpha):
     min_param = find_min_complexity(winning_params)
     return min_param
 
+import numpy as np
+from blaster import reduce
 
 def primal_lattice_basis(A, c, q, m=None):
     """
@@ -235,9 +239,14 @@ def primal_lattice_basis(A, c, q, m=None):
         B[i+n, i] = q
         B[-1, i] = c[i]
     B[-1, -1] = 1
-
+    #try blaster before going to this
     B = LLL.reduction(B)
     assert(B[:n] == IntegerMatrix(n, m+1))
     B = B[n:]
 
+    # B_np = np.empty((m+1, m+1), dtype=np.int64)
+    # B.to_matrix(B_np)
+    # U, B_red, _ = reduce(B_np.T, cores=6, use_seysen=True, verbose=True, beta=50, bkz_tours=1)
+    # B = IntegerMatrix.from_matrix(B_red.T)
+    # print(B)
     return B

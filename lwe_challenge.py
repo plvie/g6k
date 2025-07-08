@@ -34,7 +34,7 @@ import time
 from collections import OrderedDict # noqa
 from math import log
 
-from fpylll import BKZ as fplll_bkz
+from fpylll import BKZ as fplll_bkz, IntegerMatrix
 from fpylll.algorithms.bkz2 import BKZReduction
 from fpylll.tools.quality import basis_quality
 from fpylll.util import gaussian_heuristic
@@ -48,6 +48,10 @@ from g6k.utils.util import load_lwe_challenge
 
 from g6k.utils.lwe_estimation import gsa_params, primal_lattice_basis
 from six.moves import range
+
+import numpy as np
+from blaster import reduce
+
 
 
 def lwe_kernel(arg0, params=None, seed=None):
@@ -129,7 +133,6 @@ def lwe_kernel(arg0, params=None, seed=None):
     A, c, q = load_lwe_challenge(n=n, alpha=alpha)
     print("-------------------------")
     print("Primal attack, LWE challenge n=%d, alpha=%.4f" % (n, alpha))
-
     if m is None:
         try:
             min_cost_param = gsa_params(n=A.ncols, alpha=alpha, q=q,
@@ -150,13 +153,22 @@ def lwe_kernel(arg0, params=None, seed=None):
     target_norm = goal_margin * (alpha*q)**2 * m + 1
 
     if blocksizes is not None:
-        blocksizes = list(range(10, 40)) + eval("range(%s)" % re.sub(":", ",", blocksizes)) # noqa
+        blocksizes = list(range(40, 40)) + eval("range(%s)" % re.sub(":", ",", blocksizes)) # noqa
     else:
-        blocksizes = list(range(10, 50)) + [b-20, b-17] + list(range(b - 14, b + 25, 2))
-
+        blocksizes = list(range(40, 50)) + [b-20, b-17] + list(range(b - 14, b + 25, 2))
+        
     B = primal_lattice_basis(A, c, q, m=m)
+    B_np = np.empty((m+1, m+1), dtype=np.int64)
+    B.to_matrix(B_np)
+    B_np = B_np.T
+    for blocksize in blocksizes:
+        if blocksize < fpylll_crossover:
+            if verbose:
+                print("Using blaster BKZ-%d for blocksize %d." % (blocksize, blocksize)) 
+            _, B_np, _ = reduce(B_np, cores=8, use_seysen=True, beta=blocksize, bkz_tours=1)
+    B = IntegerMatrix.from_matrix(B_np.T)
 
-    g6k = Siever(B, params)
+    g6k = Siever(B, params) #not more than 128 matrix size
     print("GSO precision: ", g6k.M.float_type)
 
     if dont_trace:
@@ -165,7 +177,7 @@ def lwe_kernel(arg0, params=None, seed=None):
         tracer = SieveTreeTracer(g6k, root_label=("lwe"), start_clocks=True)
 
     d = g6k.full_n
-    blocksizes = [blocksize for blocksize in blocksizes if blocksize <= d]
+    blocksizes = [blocksize for blocksize in blocksizes if blocksize <= d and blocksize > fpylll_crossover]
     g6k.lll(0, g6k.full_n)
     slope = basis_quality(g6k.M)["/"]
     print("Intial Slope = %.5f\n" % slope)
@@ -174,23 +186,25 @@ def lwe_kernel(arg0, params=None, seed=None):
     T0_BKZ = time.time()
     for blocksize in blocksizes:
         for tt in range(tours):
+            if g6k.M.get_r(0, 0) <= target_norm:
+                break
             # BKZ tours
 
-            if blocksize < fpylll_crossover:
-                if verbose:
-                    print("Starting a fpylll BKZ-%d tour. " % (blocksize), end=' ')
-                    sys.stdout.flush()
-                bkz = BKZReduction(g6k.M)
-                par = fplll_bkz.Param(blocksize,
-                                      strategies=fplll_bkz.DEFAULT_STRATEGY,
-                                      max_loops=1)
-                bkz(par)
+            # if blocksize < fpylll_crossover:
+            #     if verbose:
+            #         print("Starting a fpylll BKZ-%d tour. " % (blocksize), end=' ')
+            #         sys.stdout.flush()
+            #     bkz = BKZReduction(g6k.M)
+            #     par = fplll_bkz.Param(blocksize,
+            #                           strategies=fplll_bkz.DEFAULT_STRATEGY,
+            #                           max_loops=1)
+            #     bkz(par)
 
-            else:
-                if verbose:
+            # else:
+            if verbose:
                     print("Starting a pnjBKZ-%d tour. " % (blocksize))
 
-                pump_n_jump_bkz_tour(g6k, tracer, blocksize, jump=jump,
+            pump_n_jump_bkz_tour(g6k, tracer, blocksize, jump=jump,
                                      verbose=verbose,
                                      extra_dim4free=extra_dim4free,
                                      dim4free_fun=dim4free_fun,
@@ -255,11 +269,45 @@ def lwe_kernel(arg0, params=None, seed=None):
 
         if g6k.M.get_r(0, 0) <= target_norm:
             print("Finished! TT=%.2f sec" % (time.time() - T0))
-            print(g6k.M.B[0])
+            solution = g6k.M.B[0]
+
+            #recover the solution vector here
+            e = np.empty(m, dtype=np.int64)
+            for i in range(m):
+                e[i] = (solution[i])
+            if solution[-1] != 1 and solution[-1] != -1:
+                print("Error: last component of solution is not +- 1")
+                e = np.asarray([x / solution[-1] for x in e])
+            elif solution[-1] == -1:
+                print("Warning: last component of solution is -1, normalizing...")
+                e = np.asarray([-x for x in e])
+            #print error norm
+            print("error norm:", np.linalg.norm(e[:m], ord=2))
+            n = A.ncols      
+            A_full = np.empty((A.nrows, A.ncols), dtype=np.int64)
+            A.to_matrix(A_full)
+            # ne garder que les n premières lignes
+            A_m = A_full[:n, :].copy()
+            # idem pour b et e
+            b_basic = (c[:n] - e[:n]) % q
+            b = np.empty((n,), dtype=np.int64)
+            for i in range(n):
+                b[i] = (b_basic[i])
+            det = int(round(np.linalg.det(A_m))) 
+            if det % q == 0:
+                raise ValueError("A_m non inversible mod q")
+            import sympy as sp
+            A_sym = sp.Matrix(A_m.tolist())
+            b_sym = sp.Matrix(b_basic.tolist())
+            Ainv_mod = A_sym.inv_mod(q)
+            x_sym = Ainv_mod * b_sym
+            x = [int(x_sym[i] % q) for i in range(A_sym.cols)]
+            print("Solution x mod q :", x)
             alpha_ = int(alpha*1000)
             filename = 'lwechallenge/%03d-%03d-solution.txt' % (n, alpha_)
             fn = open(filename, "w")
-            fn.write(str(g6k.M.B[0]))
+            fn.write("error" + str(g6k.M.B[0]) + "\n")
+            fn.write("secret: " + str(x) + "\n")
             fn.close()
             return
 
@@ -282,7 +330,7 @@ def lwe():
                                   bkz__tours=1,
                                   bkz__jump=1,
                                   bkz__extra_dim4free=12,
-                                  bkz__fpylll_crossover=51,
+                                  bkz__fpylll_crossover=51, #51 before for fpylll
                                   bkz__dim4free_fun="default_dim4free_fun",
                                   pump__down_sieve=True,
                                   dummy_tracer=True,  # set to control memory

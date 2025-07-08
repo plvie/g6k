@@ -29,6 +29,7 @@ from .pump import pump
 from .workout import workout
 import six
 from six.moves import range
+import time
 
 
 def dim4free_wrapper(dim4free_fun, blocksize):
@@ -133,16 +134,19 @@ def pump_n_jump_bkz_tour(g6k, tracer, blocksize, jump=1,
     indices += [(d - blocksize + i, blocksize - i, dim4free - i) for i in range(0, dim4free, jump)]
 
     pump_params["down_stop"] = dim4free + 3
-
+    sum_of_lll_times = 0
     for (kappa, beta, f) in indices:
         if verbose:
             print("\r k:%d, b:%d, f:%d " % (kappa, beta, f), end=' ')
             sys.stdout.flush()
 
         pump(g6k, tracer, kappa, beta, f, **pump_params)
+        time_started = time.time()
         g6k.lll(0, d)
+        sum_of_lll_times += time.time() - time_started
         if g6k.M.get_r(0, 0) <= goal_r0:
             return
+    print("total LLL time: %.2f seconds" % sum_of_lll_times)
 
     if verbose:
         print("\r k:%d, b:%d, f:%d " % (d-(blocksize-dim4free), blocksize-dim4free, 0), end=' ')

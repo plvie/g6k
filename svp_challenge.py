@@ -43,6 +43,8 @@ from g6k.utils.util import sanitize_params_names, print_stats, output_profiles
 import six
 from six.moves import range
 
+import numpy as np
+
 
 def asvp_kernel(arg0, params=None, seed=None):
     logger = logging.getLogger("asvp")
@@ -71,6 +73,9 @@ def asvp_kernel(arg0, params=None, seed=None):
         A, _ = load_matrix_file(load_matrix)
         if verbose:
             print(("Loaded file '%s'" % load_matrix))
+
+    
+ 
 
     g6k = Siever(A, params, seed=seed)
     tracer = SieveTreeTracer(g6k, root_label=("svp-challenge", n), start_clocks=True)
