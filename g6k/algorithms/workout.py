@@ -61,13 +61,10 @@ def workout(g6k, tracer, kappa, blocksize, dim4free_min=0,              # Main p
     fs = list(range(dim4free_min, f_start+1, dim4free_dec))[::-1]
 
     if goal_r0:
-        fs += 9999*[dim4free_min]
+        fs += 10*[dim4free_min]
 
     gh = gaussian_heuristic([g6k.M.get_r(i, i) for i in range(kappa, kappa+blocksize)])
     runtimestart = time.time()
-
-    prev_quality = float('inf')
-    no_improve = 0
 
     if "verbose" not in pump_params:
         pump_params["verbose"] = verbose
@@ -80,23 +77,12 @@ def workout(g6k, tracer, kappa, blocksize, dim4free_min=0,              # Main p
             sys.stdout.flush()
             pump(g6k, tracer, kappa, blocksize, f, goal_r0=goal_r0, **pump_params)
 
-            gh2 = gaussian_heuristic([g6k.M.get_r(i, i) for i in range(kappa+f, kappa+blocksize)])
-            quality = (gh * (blocksize - f)) / (gh2 * blocksize)
             if verbose:
+                gh2 = gaussian_heuristic([g6k.M.get_r(i, i) for i in range(kappa+f, kappa+blocksize)])
+                quality = (gh * (blocksize - f)) / (gh2 * blocksize)
                 print("T:%10.5fs, TT:%10.5fs, q:%10.5f r0/gh:%10.5f" %
                       (time.time() - timestart,
                        time.time() - runtimestart, quality, g6k.M.get_r(kappa, kappa) / gh))
-            if quality < prev_quality:
-                prev_quality = quality
-                no_improve = 0
-            else:
-                no_improve += 1
-                if verbose:
-                    print(f"[warn] pas d'amélioration #{no_improve}")
-                if no_improve >= max_no_improve:
-                    if verbose:
-                        print(f"[abort] {max_no_improve} pompages sans progrès, on stoppe.")
-                    return flast
 
             if g6k.M.get_r(kappa, kappa) < goal_r0:
                 break
