@@ -155,6 +155,7 @@ def pump(g6k, tracer, kappa, blocksize, dim4free, down_sieve=False,             
                     break
 
             if goal_r0 is not None and (g6k.M.get_r(kappa, kappa) <= goal_r0):
+                print('Solution:', str(g6k.M.B[kappa]))
                 return
 
             # Pump Down
@@ -169,6 +170,7 @@ def pump(g6k, tracer, kappa, blocksize, dim4free, down_sieve=False,             
                     g6k.shrink_left(1)
 
                 if goal_r0 is not None and (g6k.M.get_r(kappa, kappa) <= goal_r0):
+                    print('Solution:', str(g6k.M.B[kappa]))
                     break
 
                 # Sieve (or Shrink db)

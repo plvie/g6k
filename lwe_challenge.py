@@ -253,8 +253,7 @@ def lwe_kernel(arg0, params=None, seed=None):
 
             if verbose:
                 print("Starting svp pump_{%d, %d, %d}, n_max = %d, Tmax= %.2f sec" % (llb, d-llb, f, n_max, svp_Tmax)) # noqa
-            pump(g6k, tracer, llb, d-llb, f, verbose=verbose,
-                 goal_r0=target_norm * (d - llb)/(1.*d))
+            pump(g6k, tracer, llb, d-llb, f, verbose=verbose, goal_r0=target_norm * (d - llb)/(1.*d))
 
             if verbose:
                 slope = basis_quality(g6k.M)["/"]
@@ -325,12 +324,12 @@ def lwe():
                                   lwe__alpha=0.005,
                                   lwe__m=None,
                                   lwe__goal_margin=1.5,
-                                  lwe__svp_bkz_time_factor=1,
+                                  lwe__svp_bkz_time_factor=100,
                                   bkz__blocksizes=None,
                                   bkz__tours=1,
                                   bkz__jump=1,
                                   bkz__extra_dim4free=12,
-                                  bkz__fpylll_crossover=51, #51 before for fpylll
+                                  bkz__fpylll_crossover=41, #51 before for fpylll
                                   bkz__dim4free_fun="default_dim4free_fun",
                                   pump__down_sieve=True,
                                   dummy_tracer=True,  # set to control memory

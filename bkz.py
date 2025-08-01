@@ -40,7 +40,7 @@ from g6k.algorithms.bkz import naive_bkz_tour, pump_n_jump_bkz_tour, slide_tour
 from g6k.siever import Siever
 from g6k.utils.cli import parse_args, run_all, pop_prefixed_params
 from g6k.utils.stats import SieveTreeTracer, dummy_tracer
-from g6k.utils.util import load_prebkz
+from g6k.utils.util import load_prebkz, load_matrix_file
 from g6k.utils.util import sanitize_params_names, print_stats, output_profiles, db_stats
 import six
 import numpy as np
@@ -118,7 +118,7 @@ def bkz_kernel(arg0, params=None, seed=None):
 
     challenge_seed = params.pop("challenge_seed")
 
-    A, bkz = load_prebkz(d, s=challenge_seed, blocksize=pre_blocksize)
+    A, bkz = load_matrix_file("B_LLL")
 
     MM = GSO.Mat(A, float_type="double",
                  U=IntegerMatrix.identity(A.nrows, int_type=A.int_type),
